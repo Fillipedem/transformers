@@ -522,7 +522,7 @@ class GenerationMixin:
         model_input_name = model_input_name if model_input_name is not None else self.main_input_name
         encoder_kwargs["return_dict"] = True
         encoder_kwargs[model_input_name] = inputs_tensor
-        model_kwargs["encoder_outputs"]: ModelOutput = encoder(**encoder_kwargs)
+        model_kwargs["encoder_outputs"] = encoder(**encoder_kwargs)
 
         return model_kwargs
 
@@ -882,6 +882,7 @@ class GenerationMixin:
         remove_invalid_values: Optional[bool] = None,
         synced_gpus: Optional[bool] = False,
         exponential_decay_length_penalty: Optional[Tuple[Union[int, float]]] = None,
+        force_initial_tokens: Optional[List[int]] = None,
         **model_kwargs,
     ) -> Union[GreedySearchOutput, SampleOutput, BeamSearchOutput, BeamSampleOutput, torch.LongTensor]:
         r"""
@@ -1036,6 +1037,11 @@ class GenerationMixin:
                 generated. The tuple shall consist of: `(start_index, decay_factor)` where `start_index` indicates
                 where penalty starts and `decay_factor` represents the factor of exponential decay
 
+            force_initial_tokens: (`list(int)`, *optional*):
+                Given a list of token ids, the generation should start from this list.
+                This is set to work if the model is a encoder-decoder type.
+                force_initial_tokens should not have special tokens.
+
             model_kwargs:
                 Additional model specific kwargs will be forwarded to the `forward` function of the model. If the model
                 is an encoder-decoder model, encoder specific kwargs should not be prefixed and decoder specific kwargs
@@ -1182,6 +1188,11 @@ class GenerationMixin:
                 model_kwargs=model_kwargs,
                 device=inputs_tensor.device,
             )
+
+            # Add special tokens to input_ids
+            if force_initial_tokens is not None:
+                force_initial_tokens = force_initial_tokens.repeat(input_ids.shape[0], 1)
+                input_ids = torch.cat((input_ids, force_initial_tokens), dim=1)
         else:
             # if decoder-only then inputs_tensor has to be `input_ids`
             input_ids = inputs_tensor
